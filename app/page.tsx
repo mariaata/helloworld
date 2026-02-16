@@ -1,82 +1,70 @@
-import { supabase } from "../src/lib/supabaseClient";
+import { createSupabaseServerClient } from "../src/lib/supabase/server"
+import LoginButton from "./components/LoginButton"
+import SignOutButton from "../app/components/SignOutButton" // Add this
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function Page() {
-  // Fetch images with nested captions
+  const supabase = await createSupabaseServerClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900">
+        <h1 className="text-4xl text-white mb-6">Humor Feed</h1>
+        <LoginButton />
+      </div>
+    )
+  }
+
   const { data: images, error } = await supabase
     .from("images")
-    .select(`
-      id,
-      url,
-      captions (
-        id,
-        content
-      )
-    `);
+    .select("id, url, captions(content)")
+    .eq("is_public", true)
+    .order("created_datetime_utc", { ascending: false })
+    .limit(100)
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700">
-        <p className="text-red-400 text-lg">{error.message}</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <p className="text-red-500 text-lg">Error fetching images: {error.message}</p>
       </div>
-    );
-  }
-
-  if (!images || images.length === 0) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700">
-        <p className="text-gray-300 text-lg">No images found in the database.</p>
-      </div>
-    );
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 p-8">
-      {/* Page Header */}
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 p-8">
       <header className="mb-12 text-center">
         <h1 className="text-5xl font-extrabold text-white mb-2 tracking-tight">
-          Humor Image Gallery
+          Humor Feed
         </h1>
-        <p className="text-gray-300 text-lg max-w-xl mx-auto">
-          Relax and scroll through a calm feed of images with their captions.
+        <p className="text-gray-400 text-lg">
+          The internet's quiet thoughts, out loud.
         </p>
-        <div className="mt-6 flex justify-center">
-          <div className="h-[2px] w-24 rounded-full bg-pink-400/60" />
+        <div className="mt-6 flex justify-center gap-4 items-center">
+          <SignOutButton /> {/* Add sign out button */}
         </div>
       </header>
-
-      {/* Images Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center">
-        {images.map((img: any) => (
+        {images?.map((img: any) => (
           <div
             key={img.id}
-            className="relative w-72 rounded-2xl shadow-lg bg-gray-800/80 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-2xl"
+            className="group relative w-72 rounded-xl shadow-2xl overflow-hidden transform transition duration-500 hover:scale-105 hover:rotate-1"
           >
-            {/* Image */}
-            <img
-              src={img.url}
-              alt="Image"
-              className="w-full h-56 object-cover rounded-t-2xl"
-            />
-
-            {/* Caption always visible */}
-            <div className="p-4 bg-gray-900/70 backdrop-blur-sm flex-grow flex items-center">
-              <p className="text-gray-100 text-sm font-medium">
-                {img.captions && img.captions.length > 0
-                  ? img.captions[0].content
-                  : "No caption yet"}
-              </p>
-            </div>
-
-            {/* Footer with subtle info */}
-            <div className="p-3 flex justify-between items-center bg-gray-800/60 rounded-b-2xl text-gray-300 text-xs">
-              <span>{img.captions?.length || 0} caption(s)</span>
-              <button className="text-pink-400 hover:text-pink-500 font-medium transition-colors">
-                Like
-              </button>
+            <div className="relative w-full h-56">
+              <img src={img.url} alt="Image" className="w-full h-full object-cover" />
+              {img.captions && img.captions.length > 0 && (
+                <div className="absolute bottom-0 left-0 w-full p-3 bg-black/50 backdrop-blur-sm rounded-b-xl">
+                  <p className="text-sm text-gray-100 font-medium">
+                    {img.captions[0].content}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }
