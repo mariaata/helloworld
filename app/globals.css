@@ -24,3 +24,39 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Light mode styles */
+body.light-mode {
+  background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb, #d1d5db);
+}
+
+body.light-mode .bg-black {
+  background: white !important;
+}
+
+body.light-mode .text-white {
+  color: #111827 !important;
+}
+
+body.light-mode .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+body.light-mode .bg-gray-900 {
+  background: white !important;
+}
+
+body.light-mode .border-gray-700,
+body.light-mode .border-white\/10,
+body.light-mode .border-white\/5 {
+  border-color: #d1d5db !important;
+}
+
+body.light-mode .bg-white\/5,
+body.light-mode .bg-white\/10 {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+body.light-mode .bg-white\/20 {
+  background: rgba(0, 0, 0, 0.1) !important;
+}

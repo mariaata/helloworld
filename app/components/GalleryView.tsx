@@ -1,5 +1,5 @@
 "use client"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { createSupabaseBrowserClient } from "../../src/lib/supabase/client"
 
 interface Caption {
@@ -20,25 +20,85 @@ interface GalleryViewProps {
 
 export default function GalleryView({ images, userId }: GalleryViewProps) {
   const supabase = createSupabaseBrowserClient()
+  const [votes, setVotes] = useState<Record<string, number>>({})
 
-  // Flatten all captions
-  const allCards = useMemo(() => {
-    return images.flatMap(image =>
-      image.captions
-        .filter(caption => caption?.content?.trim())
+  const groupedCards = useMemo(() => {
+    const imageMap = new Map<string, Array<{
+      captionId: string
+      content: string
+      imageUrl: string
+      imageId: string
+    }>>()
+    
+    images.forEach(image => {
+      const seen = new Set<string>()
+      const captions = image.captions
+        .filter(caption => {
+          if (!caption?.content?.trim()) return false
+          const normalized = caption.content.trim().toLowerCase()
+          if (seen.has(normalized)) return false
+          seen.add(normalized)
+          return true
+        })
         .map(caption => ({
           captionId: caption.id,
           content: caption.content,
           imageUrl: image.url,
           imageId: image.id
         }))
-    ).sort(() => Math.random() - 0.5) // Shuffle
+      
+      if (captions.length > 0) {
+        if (!imageMap.has(image.url)) {
+          imageMap.set(image.url, [])
+        }
+        imageMap.get(image.url)!.push(...captions)
+      }
+    })
+    
+    return Array.from(imageMap.entries())
   }, [images])
 
-  const [votes, setVotes] = useState<Record<string, number>>({})
+  const [shuffledGroups, setShuffledGroups] = useState(groupedCards)
+
+  useEffect(() => {
+    setShuffledGroups([...groupedCards].sort(() => Math.random() - 0.5))
+  }, [groupedCards])
+
+  useEffect(() => {
+    const savedVotes = localStorage.getItem(`galleryVotes_${userId}`)
+    if (savedVotes) {
+      setVotes(JSON.parse(savedVotes))
+    }
+    loadExistingVotes()
+  }, [userId])
+
+  useEffect(() => {
+    localStorage.setItem(`galleryVotes_${userId}`, JSON.stringify(votes))
+  }, [votes, userId])
+
+  const loadExistingVotes = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user?.id) return
+
+      const { data: dbVotes } = await supabase
+        .from("caption_votes")
+        .select("caption_id, vote_value")
+        .eq("profile_id", session.user.id)
+
+      if (dbVotes) {
+        const voteMap: Record<string, number> = {}
+        dbVotes.forEach(v => {
+          voteMap[v.caption_id] = v.vote_value
+        })
+        setVotes(voteMap)
+      }
+    } catch (error) {
+      console.error("Error loading votes:", error)
+    }
+  }
 
   const handleVote = async (captionId: string, vote: number) => {
-    // Toggle vote (click again to remove)
     const newVote = votes[captionId] === vote ? 0 : vote
     
     setVotes(prev => ({
@@ -54,7 +114,6 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
       }
 
       if (newVote === 0) {
-        // Remove vote
         const { error } = await supabase
           .from("caption_votes")
           .delete()
@@ -63,7 +122,6 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
 
         if (error) throw error
       } else {
-        // Check if vote exists
         const { data: existingVote } = await supabase
           .from("caption_votes")
           .select("id")
@@ -72,7 +130,6 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
           .maybeSingle()
 
         if (existingVote) {
-          // Update
           const { error } = await supabase
             .from("caption_votes")
             .update({ 
@@ -83,7 +140,6 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
 
           if (error) throw error
         } else {
-          // Insert
           const { error } = await supabase
             .from("caption_votes")
             .insert({
@@ -98,20 +154,18 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
         }
       }
 
-      console.log("✅ Vote saved to database")
+      console.log("✅ Vote saved")
     } catch (error: any) {
       console.error("❌ Error saving vote:", error)
       alert(`Failed to save vote: ${error.message}`)
     }
   }
 
-  // Calculate stats
   const upvoted = Object.values(votes).filter(v => v === 1).length
   const downvoted = Object.values(votes).filter(v => v === -1).length
 
   return (
     <div className="max-w-7xl mx-auto">
-      
       <div className="mb-8 flex gap-8 justify-center">
         <div className="text-center">
           <p className="text-3xl font-bold text-green-400">{upvoted}</p>
@@ -123,57 +177,69 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
         </div>
       </div>
 
-      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {allCards.map((card) => {
-          const userVote = votes[card.captionId] || 0
+        {shuffledGroups.map(([imageUrl, cards]) => {
+          const remainingCards = cards.filter(card => !votes[card.captionId])
+          
+          if (remainingCards.length === 0) return null
+
+          const topCard = remainingCards[0]
+          const stackCount = remainingCards.length
 
           return (
             <div
-              key={card.captionId}
-              className={`bg-white/5 rounded-2xl overflow-hidden backdrop-blur-sm border transition-all hover:scale-[1.02] ${
-                userVote === 1 ? 'border-green-500 shadow-lg shadow-green-500/20' :
-                userVote === -1 ? 'border-red-500 shadow-lg shadow-red-500/20' :
-                'border-white/10'
-              }`}
+              key={imageUrl}
+              className="relative"
             >
-              
-              <div className="relative aspect-video">
-                <img
-                  src={card.imageUrl}
-                  alt="Meme"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              {/* Stack indicator */}
+              {stackCount > 1 && (
+                <div className="absolute -top-1 -right-1 z-10 bg-purple-500 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg">
+                  {stackCount}
+                </div>
+              )}
 
-             
-              <div className="p-4">
-                <p className="text-white text-sm leading-relaxed mb-4 line-clamp-3">
-                  {card.content}
-                </p>
+              {/* Stacked shadow effect */}
+              {stackCount > 1 && (
+                <>
+                  <div className="absolute inset-0 bg-white/5 rounded-2xl transform translate-x-1 translate-y-1 -z-10" />
+                  {stackCount > 2 && (
+                    <div className="absolute inset-0 bg-white/5 rounded-2xl transform translate-x-2 translate-y-2 -z-20" />
+                  )}
+                </>
+              )}
 
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleVote(card.captionId, 1)}
-                    className={`flex-1 py-2 rounded-lg transition-all ${
-                      userVote === 1
-                        ? 'bg-green-500 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    👍
-                  </button>
-                  <button
-                    onClick={() => handleVote(card.captionId, -1)}
-                    className={`flex-1 py-2 rounded-lg transition-all ${
-                      userVote === -1
-                        ? 'bg-red-500 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    👎
-                  </button>
+              <div
+                className={`bg-white/5 rounded-2xl overflow-hidden backdrop-blur-sm border border-white/10 transition-all hover:scale-[1.02] ${
+                  votes[topCard.captionId] ? 'opacity-0 scale-95' : 'opacity-100'
+                }`}
+              >
+                <div className="relative aspect-video">
+                  <img
+                    src={topCard.imageUrl}
+                    alt="Meme"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                <div className="p-4">
+                  <p className="text-white text-sm leading-relaxed mb-4 line-clamp-3">
+                    {topCard.content}
+                  </p>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleVote(topCard.captionId, 1)}
+                      className="flex-1 py-2 rounded-lg transition-all bg-white/10 text-gray-300 hover:bg-green-500 hover:text-white"
+                    >
+                      👍
+                    </button>
+                    <button
+                      onClick={() => handleVote(topCard.captionId, -1)}
+                      className="flex-1 py-2 rounded-lg transition-all bg-white/10 text-gray-300 hover:bg-red-500 hover:text-white"
+                    >
+                      👎
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
