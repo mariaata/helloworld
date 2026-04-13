@@ -130,22 +130,27 @@ export default function GalleryView({ images, userId }: GalleryViewProps) {
           .maybeSingle()
 
         if (existingVote) {
+          // UPDATE - Add modified_by_user_id
           const { error } = await supabase
             .from("caption_votes")
             .update({ 
               vote_value: newVote,
+              modified_by_user_id: session.user.id,     // ✅ ADDED
               modified_datetime_utc: new Date().toISOString()
             })
             .eq("id", existingVote.id)
 
           if (error) throw error
         } else {
+          // INSERT - Add created_by_user_id and modified_by_user_id
           const { error } = await supabase
             .from("caption_votes")
             .insert({
               profile_id: session.user.id,
               caption_id: captionId,
               vote_value: newVote,
+              created_by_user_id: session.user.id,      // ✅ ADDED
+              modified_by_user_id: session.user.id,     // ✅ ADDED
               created_datetime_utc: new Date().toISOString(),
               modified_datetime_utc: new Date().toISOString()
             })
