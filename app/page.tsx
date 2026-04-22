@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "../src/lib/supabase/server"
 import LoginButton from "./components/LoginButton"
 import SignOutButton from "./components/SignOutButton"
 import MainContent from "./components/MainContent"
-import ThemeWrapper from "./components/ThemeWrapper"
 import Link from "next/link"
 
 export const dynamic = "force-dynamic"
@@ -14,14 +13,14 @@ export default async function Page() {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-black">
+      <div className="min-h-screen flex flex-col items-center justify-center">
         <div className="text-center">
           <div className="mb-8">
             <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/20">
               <span className="text-5xl">😂</span>
             </div>
-            <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">Humor Feed</h1>
-            <p className="text-gray-400 text-lg">Vote on the funniest captions</p>
+            <h1 className="text-5xl font-bold text-white dark:text-white light:text-gray-900 mb-3 tracking-tight">Humor Feed</h1>
+            <p className="text-gray-400 dark:text-gray-400 light:text-gray-600 text-lg">Vote on the funniest captions</p>
           </div>
           <LoginButton />
         </div>
@@ -39,7 +38,7 @@ export default async function Page() {
   if (error) {
     console.error("Database error:", error)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="min-h-screen flex items-center justify-center">
         <p className="text-red-400 text-lg">Error fetching images: {error.message}</p>
       </div>
     )
@@ -52,7 +51,5 @@ export default async function Page() {
     img.captions.some((caption: any) => caption.content && caption.content.trim() !== '')
   ) || []
 
-  return (
-    <ThemeWrapper images={imagesWithCaptions} userId={session.user.id} />
-  )
+  return <MainContent images={imagesWithCaptions} userId={session.user.id} />
 }
